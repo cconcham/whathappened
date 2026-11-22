@@ -289,6 +289,9 @@ h1{letter-spacing:-.045em}
 .scene.s2{z-index:2}.scene.s3{z-index:3}
 @keyframes sc1{0%,36%{opacity:1}36.1%,94%{opacity:0}94.1%,100%{opacity:1}}
 @keyframes sc2{0%,30%{opacity:0}36%,69%{opacity:1}69.1%,100%{opacity:0}}
+.whoami{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.take{color:var(--ink);font-weight:600;margin-top:4px}
+#deeper .leg{position:sticky;top:76px;z-index:3;align-self:flex-start;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:999px;padding:6px 14px;border:1px solid var(--edge)}
 /* ---------- phones ---------- */
 #threads{touch-action:pan-y}
 .linkbtn{min-height:44px}
@@ -384,6 +387,7 @@ h1{letter-spacing:-.045em}
         <p class="eyebrow">Your chat is in</p>
         <h3 id="doneNames"></h3>
         <p class="small muted" id="doneMeta"></p>
+        <div class="whoami"><span class="small muted" id="whoAsk">Which one are you?</span><div class="tabs os" role="group" aria-label="Which one are you"><button type="button" id="me0" aria-pressed="false"></button><button type="button" id="me1" aria-pressed="false"></button></div></div>
         <div class="donebtns"><button class="btn" id="seeBtn" type="button">See what happened</button><button class="linkbtn" id="again" type="button">Use another chat</button></div>
       </div>
       <p id="status" role="status"></p>
@@ -437,6 +441,14 @@ h1{letter-spacing:-.045em}
   <p class="muted">The score is how much evidence for a theme shows up in the messages, from 0 to 100. It is not the chance that it happened. Each theme lists the dated moments behind it so you can judge for yourself.</p>
   <p class="small muted" id="reasonHint" hidden>These themes were found by matching words in the messages near the end, not by reading them. A word can be used in passing, so read the lines before trusting a score.</p>
   <div class="reasons" id="reasonCards"></div>
+</section>
+
+<section class="sec" id="deeper">
+  <h2>Look closer</h2>
+  <p class="muted">More ways to read the same chat, for when you want to go further. The colours stay the same in every chart, and the dashed line is the week it changed.</p>
+  <p class="small muted" id="moreNote">Your own chat adds affection, curiosity, message length, photos, calls, matching style and the hours you wrote.</p>
+  <div class="leg" id="legend2"></div>
+  <div class="two" id="moreCharts"></div>
 </section>
 
 <section class="sec soon" id="more">
@@ -501,26 +513,42 @@ function isCall(x){return /voice call|video call|missed call/i.test(x);}
 function isMedia(x){return /<attached:|omitted|\.(jpg|webp|mp4|opus|pdf)\b/i.test(x);}
 
 /* ---------- metrics ---------- */
-function analyse(msgs){
+var FW={};
+[["i me my mine you your yours he she him her his hers we us our they them their yo tu t\u00fa te mi \u00e9l ella nosotros nos su sus ti"],
+ ["it its this that these those something anything everything nothing what who which esto eso ese esa algo nada todo que qu\u00e9 quien"],
+ ["a an the el la los las un una unos unas"],
+ ["of in on at to for with from by about into over after before de en por para con desde sobre sin"],
+ ["am is are was were be been have has had do does did will would can could should might must es est\u00e1 estoy est\u00e1s son era fue ha han hay voy vas va puedo puedes"],
+ ["very really just so too also now then here there still always muy ya tambi\u00e9n ahora aqu\u00ed all\u00ed siempre tan solo"],
+ ["and or but because if while although y o pero porque si aunque cuando"],
+ ["no not never don't dont can't cant won't isn't didn't nunca ni tampoco"],
+ ["all some many much few more most less any every mucho poco m\u00e1s menos todos algunos cada"]
+].forEach(function(g,ci){g[0].split(" ").forEach(function(t){if(FW[t]==null){FW[t]=ci;}});});
+function analyse(msgs,me){
   var count={};msgs.forEach(function(m){count[m.who]=(count[m.who]||0)+1;});
   var names=Object.keys(count).sort(function(a,b){return count[b]-count[a];}).slice(0,2);
   if(names.length<2){throw new Error("This chat needs two people. Group chats and empty exports are not supported yet.");}
+  if(count[names[0]]+count[names[1]]<0.88*msgs.length){throw new Error("This looks like a group chat. WhatHappened compares two people, so export a chat between just the two of you.");}
+  if(me&&names[1]===me){names.reverse();}
   msgs=msgs.filter(function(m){return names.indexOf(m.who)>=0;});
   var sn=names.map(function(x){return x.replace(/^[^A-Za-z\u00C0-\uFFFF]+/,"").split(/\s+/)[0];});if(!sn[0]||!sn[1]||sn[0]===sn[1]){sn=names.slice();}
   var w0=monday(msgs[0].t),wN=monday(msgs[msgs.length-1].t),weeks=[],idx={},d=new Date(w0);
-  while(d<=wN){idx[iso(d)]=weeks.length;weeks.push({start:new Date(d),n:[0,0],rep:[[],[]],first:[0,0],days:{}});d.setDate(d.getDate()+7);}
+  while(d<=wN){idx[iso(d)]=weeks.length;weeks.push({start:new Date(d),n:[0,0],rep:[[],[]],first:[0,0],days:{},words:[0,0],txt:[0,0],media:[0,0],calls:0,fw:[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]]});d.setDate(d.getDate()+7);}
   if(weeks.length<10){throw new Error("This chat covers less than ten weeks, which is too short to find a pattern.");}
   var seenDay={},prev=null,AFF=/\u2764|\ud83e\udef6|\ud83d\ude18|\ud83e\udd70|\ud83d\ude0d|\ud83d\udc95|\ud83d\udc96|\ud83d\ude0a|\ud83e\udd17|\ud83d\ude02|\ud83e\udd23|haha|jaja|hehe|\blol\b|\blove\b|miss you|te quiero|te amo|\bxx+\b|proud of you|thank|gracias/i;
   weeks.forEach(function(w){w.aff=[0,0];w.q=[0,0];});
   msgs.forEach(function(m){
     var p=names.indexOf(m.who),w=weeks[idx[iso(monday(m.t))]];
-    w.n[p]++;w.days[iso(m.t)]=1;if(AFF.test(m.text)){w.aff[p]++;}if(m.text.indexOf("?")>=0){w.q[p]++;}
+    w.n[p]++;w.days[iso(m.t)]=1;
+    if(isCall(m.text)){w.calls++;}else if(isMedia(m.text)){w.media[p]++;}else{var tk=m.text.toLowerCase().match(/[a-z\u00e0-\u00ff']+/g)||[];w.words[p]+=tk.length;w.txt[p]++;for(var ti=0;ti<tk.length;ti++){var ci=FW[tk[ti]];if(ci!=null){w.fw[p][ci]++;}}}if(AFF.test(m.text)){w.aff[p]++;}if(m.text.indexOf("?")>=0){w.q[p]++;}
     var dk=iso(new Date(m.t.getTime()-5*3600e3));
     if(!seenDay[dk]){seenDay[dk]=1;w.first[p]++;}
     if(prev&&prev.who!==m.who&&!isCall(m.text)&&!isCall(prev.text)){var g=(m.t-prev.t)/60000;if(g<720){w.rep[p].push(g);}}
     prev=m;
   });
   weeks.forEach(function(w){w.tot=w.n[0]+w.n[1];w.med=[w.rep[0].length>=4?median(w.rep[0]):null,w.rep[1].length>=4?median(w.rep[1]):null];w.active=Object.keys(w.days).length;});
+  /* quiet weeks: borrow the neighbouring weeks so the reply line does not vanish */
+  weeks.map(function(w,i){return [0,1].map(function(p){if(w.med[p]!=null||!w.rep[p].length){return w.med[p];}var a=[];for(var k=Math.max(0,i-1);k<=Math.min(weeks.length-1,i+1);k++){a.push.apply(a,weeks[k].rep[p]);}return a.length>=4?median(a):null;});}).forEach(function(v,i){weeks[i].med=v;});
   [0,1].forEach(function(p){
     var typical=median(weeks.map(function(w){return w.n[p];}).filter(function(v){return v>0;}))||1,raw=weeks.map(function(w){
       if(!w.n[p]){return 0;}
@@ -532,12 +560,13 @@ function analyse(msgs){
   });
   /* change week: volume falls under 40% of the previous eight weeks and does not recover */
   var change=null;
-  for(var i=8;i<weeks.length;i++){
+  var lastT=msgs[msgs.length-1].t,full=weeks.length-(((lastT.getDay()+6)%7)<5?1:0);
+  for(var i=8;i<full-1;i++){
     var pm=median(weeks.slice(i-8,i).map(function(w){return w.tot;}));
     if(pm<10){continue;}
-    var next=weeks.slice(i,i+3).map(function(w){return w.tot;});
+    var next=weeks.slice(i,Math.min(full,i+3)).map(function(w){return w.tot;});
     var avg=next.reduce(function(a,b){return a+b;},0)/next.length;
-    var later=weeks.slice(i+1).map(function(w){return w.tot;});
+    var later=weeks.slice(i+1,full).map(function(w){return w.tot;});
     var maxLater=later.length?Math.max.apply(null,later):0;
     if(weeks[i].tot<0.4*pm&&avg<0.4*pm&&maxLater<0.7*pm){change=i;break;}
   }
@@ -573,7 +602,7 @@ function analyse(msgs){
     var p=ratio[0]>=ratio[1]?0:1;
     if(ratio[p]>1.5){slow={p:p,b:res[p].b,a:res[p].a};}
   }
-  return {names:sn,full:names,msgs:msgs,weeks:weeks,change:change,signals:signals,slow:slow,count:[count[names[0]],count[names[1]]]};
+  return {names:sn,label:[sn[0]+(me?" (you)":""),sn[1]],me:me?0:null,full:names,msgs:msgs,weeks:weeks,change:change,signals:signals,slow:slow,count:[count[names[0]],count[names[1]]]};
 }
 
 /* ---------- softer hints: was the last stretch before the change the lowest ever? ---------- */
@@ -665,7 +694,7 @@ function exampleData(){
     var wa=late?52+rnd()*8:62+14*Math.sin(i/6)+rnd()*8,wb=late?14+rnd()*8:(strain?48-(i-40)*3+rnd()*6:64+14*Math.sin(i/6+0.5)+rnd()*8);
     weeks.push({start:d,warm:[wa,wb],n:[a,b],tot:a+b,med:[ra,rb],first:[late?4:3+Math.round(rnd()*2),late?0:2+Math.round(rnd()*2)],active:late?3:7,rep:[[],[]]});
   }
-  return {names:names,weeks:weeks,change:47,example:true,count:[3120,2710],
+  return {names:names,label:["Alex (you)","Sam"],weeks:weeks,change:47,example:true,count:[3120,2710],
     slow:{p:1,b:5.6,a:58},
     signals:[
       {kind:"reply",p:1,label:"Sam's reply time",range:"3.9 to 9.8 min",first:41,lead:6,value:"14.2 min"},
@@ -720,7 +749,7 @@ function drawThreads(D){
   svg.onpointermove=function(ev){var r=svg.getBoundingClientRect();if(!r.width){return;}var x=(ev.clientX-r.left)/r.width*W;var i=Math.max(0,Math.min(n-1,Math.round((x-m.l)/(W-m.l-m.r)*(n-1))));cur.setAttribute("x1",X(i));cur.setAttribute("x2",X(i));cur.setAttribute("opacity",.45);var w=D.weeks[i];$("scrub").textContent="Week of "+fmtDate(w.start)+": "+D.names[0]+" "+feel(w.warm[0])+", "+D.names[1]+" "+feel(w.warm[1])+".";};
   svg.onpointerleave=function(){cur.setAttribute("opacity",0);$("scrub").textContent=hint;};
   $("capStart").textContent=fmtDate(D.weeks[0].start);$("capEnd").textContent=fmtDate(D.weeks[n-1].start);
-  var lg=$("heroLegend");lg.replaceChildren();[0,1].forEach(function(p){var sp=h("span");var b=h("b");b.style.background=p?"var(--b)":"var(--a)";sp.appendChild(b);sp.appendChild(document.createTextNode(D.names[p]));lg.appendChild(sp);});
+  var lg=$("heroLegend");lg.replaceChildren();[0,1].forEach(function(p){var sp=h("span");var b=h("b");b.style.background=p?"var(--b)":"var(--a)";sp.appendChild(b);sp.appendChild(document.createTextNode((D.label||D.names)[p]));lg.appendChild(sp);});
   var say;
   if(D.change!=null){
     var months=Math.max(1,Math.round(D.change/4.345)),bw=[0,1].map(function(p){var a=D.weeks.slice(Math.max(0,D.change-12),D.change),b=D.weeks.slice(D.change);var f=function(x){return x.reduce(function(s,w){return s+w.warm[p];},0)/Math.max(1,x.length);};return f(a)-f(b);});
@@ -729,27 +758,80 @@ function drawThreads(D){
   }else{say="Warm with each other all the way through. The chat shows no clear break.";}
   $("say").textContent=say;
 }
-function lineChart(host,D,get,label){
-  host.replaceChildren();
+function sm(arr,i){if(arr[i]==null){return null;}var a=[];for(var k=Math.max(0,i-1);k<=Math.min(arr.length-1,i+1);k++){if(arr[k]!=null){a.push(arr[k]);}}return a.reduce(function(x,y){return x+y;},0)/a.length;}
+function drawLines(host,D,series,opts){
+  opts=opts||{};host.replaceChildren();
   var W=520,H=230,m={t:12,r:10,b:26,l:38},n=D.weeks.length,vals=[];
-  D.weeks.forEach(function(w){[0,1].forEach(function(p){var v=get(w,p);if(v!=null){vals.push(v);}});});
-  var cap=quant(vals,0.98)||1,max=Math.max(cap*1.1,1);
-  var X=function(i){return m.l+(W-m.l-m.r)*i/(n-1);},Y=function(v){return H-m.b-(H-m.t-m.b)*Math.min(v,max)/max;};
-  var svg=el("svg",{viewBox:"0 0 "+W+" "+H,role:"img","aria-label":label});
-  for(var g=0;g<=4;g++){var v=max*g/4,y=Y(v);svg.appendChild(el("line",{x1:m.l,x2:W-m.r,y1:y,y2:y,stroke:"var(--line)","stroke-width":1}));svg.appendChild(el("text",{x:m.l-6,y:y+4,"text-anchor":"end"},String(Math.round(v))));}
+  var data=series.map(function(sr){var raw=D.weeks.map(function(w,i){var v=sr.get(w,i);return v==null||isNaN(v)||!isFinite(v)?null:v;});return opts.smooth?raw.map(function(_,i){return sm(raw,i);}):raw;});
+  data.forEach(function(a){a.forEach(function(v){if(v!=null){vals.push(v);}});});
+  if(!vals.length){return false;}
+  var max=opts.max||Math.max((quant(vals,0.98)||1)*1.1,opts.ref?opts.ref*1.2:0,1);
+  var X=function(i){return m.l+(W-m.l-m.r)*i/Math.max(1,n-1);},Y=function(v){return H-m.b-(H-m.t-m.b)*Math.max(0,Math.min(v,max))/max;};
+  var svg=el("svg",{viewBox:"0 0 "+W+" "+H,role:"img","aria-label":opts.label||""});
+  for(var g=0;g<=4;g++){var v=max*g/4,y=Y(v);svg.appendChild(el("line",{x1:m.l,x2:W-m.r,y1:y,y2:y,stroke:"var(--line)","stroke-width":1}));svg.appendChild(el("text",{x:m.l-6,y:y+4,"text-anchor":"end"},String(max<10?r1(v):Math.round(v))));}
+  if(opts.ref!=null){svg.appendChild(el("line",{x1:m.l,x2:W-m.r,y1:Y(opts.ref),y2:Y(opts.ref),stroke:"var(--muted)","stroke-width":1,"stroke-dasharray":"2 4"}));}
   var step=Math.max(1,Math.round(n/5));
   for(var i=0;i<n;i+=step){var d=D.weeks[i].start;svg.appendChild(el("text",{x:X(i),y:H-8,"text-anchor":i===0?"start":X(i)>W-m.r-24?"end":"middle"},MON[d.getMonth()]+" "+String(d.getFullYear()).slice(2)));}
   if(D.change!=null){svg.appendChild(el("line",{x1:X(D.change),x2:X(D.change),y1:m.t,y2:H-m.b,stroke:"var(--muted)","stroke-dasharray":"4 4","stroke-width":1}));}
-  [0,1].forEach(function(p){
-    var d="",pen=false;
-    D.weeks.forEach(function(w,i){var v=get(w,p);if(v==null){pen=false;return;}d+=(pen?" L":" M")+X(i).toFixed(1)+" "+Y(v).toFixed(1);pen=true;});
-    svg.appendChild(el("path",{d:d,fill:"none",stroke:p?"var(--b)":"var(--a)","stroke-width":2,"stroke-linejoin":"round"}));
+  data.forEach(function(a,si){
+    var d="",pts=0,lx=0,ly=0;
+    a.forEach(function(v,i){if(v==null){return;}lx=X(i);ly=Y(v);d+=(pts?" L":"M")+lx.toFixed(1)+" "+ly.toFixed(1);pts++;});
+    var col=series[si].color;
+    if(pts>1){svg.appendChild(el("path",{d:d,fill:"none",stroke:col,"stroke-width":2,"stroke-linejoin":"round","stroke-linecap":"round",opacity:series[si].soft?0.7:1}));}
+    else if(pts===1){svg.appendChild(el("circle",{cx:lx,cy:ly,r:3.5,fill:col}));}
   });
-  host.appendChild(svg);
+  host.appendChild(svg);return true;
+}
+function lineChart(host,D,get,label){drawLines(host,D,[0,1].map(function(p){return {get:function(w){return get(w,p);},color:p?"var(--b)":"var(--a)"};}),{label:label});}
+function lsmAt(D,i){
+  var W=D.weeks,f=[[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],n=[0,0];
+  for(var k=Math.max(0,i-1);k<=Math.min(W.length-1,i+1);k++){if(!W[k].fw){return null;}for(var p=0;p<2;p++){n[p]+=W[k].words[p];for(var c=0;c<9;c++){f[p][c]+=W[k].fw[p][c];}}}
+  if(n[0]<60||n[1]<60){return null;}
+  var t=0;for(var c2=0;c2<9;c2++){var a=f[0][c2]/n[0],b=f[1][c2]/n[1];t+=1-Math.abs(a-b)/(a+b+0.0001);}
+  return 100*t/9;
+}
+function renderMore(D){
+  var host=$("moreCharts");host.replaceChildren();
+  var L=D.label||D.names,A="var(--a)",B="var(--b)",N="var(--ink)",c=D.change,W=D.weeks,shown=0;
+  var lg=$("legend2");lg.replaceChildren();[0,1].forEach(function(p){var sp=h("span");var b=h("b");b.style.background=p?B:A;sp.appendChild(b);sp.appendChild(document.createTextNode(L[p]));lg.appendChild(sp);});
+  function S(ws,f){return ws.reduce(function(x,w){var v=f(w);return x+(v||0);},0);}
+  function fmt(v,u){return v==null||isNaN(v)||!isFinite(v)?"too little to say":(Math.abs(v)>=10?Math.round(v):r1(v))+(u||"");}
+  function parts(){return c!=null&&c>=2&&c<W.length?[["Before the change",W.slice(0,c)],["After",W.slice(c)]]:[["Across the whole chat",W]];}
+  function one(f,u){return function(){return parts().map(function(x){return x[0]+": "+fmt(f(x[1]),u)+".";}).join(" ");};}
+  function both(f,u){return function(){return parts().map(function(x){return x[0]+": "+D.names[0]+" "+fmt(f(x[1],0),u)+", "+D.names[1]+" "+fmt(f(x[1],1),u)+".";}).join(" ");};}
+  function two(get){return [0,1].map(function(p){return {get:function(w,i){return get(w,p,i);},color:p?B:A};});}
+  function add(title,sub,series,opts,take){
+    var card=h("div","card"),ch=h("div","chart");card.appendChild(h("h3",null,title));card.appendChild(h("p","small muted",sub));
+    opts.label=title;if(!drawLines(ch,D,series,opts)){return;}
+    card.appendChild(ch);if(take){card.appendChild(h("p","small take",take()));}host.appendChild(card);shown++;
+  }
+  add("Who carried the conversation","Share of all messages sent by "+L[0]+". The dotted line at 50 is an even split.",[{get:function(w){return w.tot>=6?100*w.n[0]/w.tot:null;},color:A}],{max:100,ref:50,smooth:1},one(function(ws){return 100*S(ws,function(w){return w.n[0];})/S(ws,function(w){return w.tot;});},"%"));
+  add("Who started the day","Days each week when each of you wrote first.",two(function(w,p){return w.first[p];}),{max:7,smooth:1},both(function(ws,p){return S(ws,function(w){return w.first[p];})/ws.length;}," days a week"));
+  add("Affection and laughter","Messages with warm words, hearts or laughter, out of every 100.",two(function(w,p){return w.aff&&w.n[p]>=5?100*w.aff[p]/w.n[p]:null;}),{smooth:1},both(function(ws,p){return 100*S(ws,function(w){return w.aff[p];})/S(ws,function(w){return w.n[p];});}));
+  add("Curiosity","Messages with a question in them, out of every 100.",two(function(w,p){return w.q&&w.n[p]>=5?100*w.q[p]/w.n[p]:null;}),{smooth:1},both(function(ws,p){return 100*S(ws,function(w){return w.q[p];})/S(ws,function(w){return w.n[p];});}));
+  add("How much each of you wrote","Average number of words in a message.",two(function(w,p){return w.txt&&w.txt[p]>=5?w.words[p]/w.txt[p]:null;}),{smooth:1},both(function(ws,p){return S(ws,function(w){return w.words[p];})/S(ws,function(w){return w.txt[p];});}," words"));
+  add("Photos, videos and voice notes","How many each of you sent in a week.",two(function(w,p){return w.media?w.media[p]:null;}),{smooth:1},both(function(ws,p){return S(ws,function(w){return w.media[p];})/ws.length;}," a week"));
+  add("Calls","Voice and video calls logged in the chat each week, answered or missed.",[{get:function(w){return w.calls;},color:N,soft:1}],{smooth:1},one(function(ws){return S(ws,function(w){return w.calls;})/ws.length;}," a week"));
+  add("Talking alike","How closely your small everyday words matched, from 0 to 100. In research, couples who match more tend to last longer. For one couple it is only a hint.",[{get:function(w,i){return lsmAt(D,i);},color:N,soft:1}],{max:100},one(function(ws){var a=[];ws.forEach(function(w){var v=lsmAt(D,W.indexOf(w));if(v!=null){a.push(v);}});return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:null;}));
+  add("Days in touch","Days each week with at least one message.",[{get:function(w){return w.active;},color:N,soft:1}],{max:7},one(function(ws){return S(ws,function(w){return w.active;})/ws.length;}," days a week"));
+  if(D.msgs&&D.msgs.length){
+    var hrs=[new Array(24).fill(0),new Array(24).fill(0)],tot=[0,0];
+    D.msgs.forEach(function(mm){var p=D.full.indexOf(mm.who);if(p<0){return;}hrs[p][mm.t.getHours()]++;tot[p]++;});
+    if(tot[0]&&tot[1]){
+      var card=h("div","card"),ch=h("div","chart"),BW=520,BH=230,bm={t:12,r:10,b:26,l:38},pc=hrs.map(function(a,p){return a.map(function(v){return 100*v/tot[p];});}),mx=Math.max(1,Math.max.apply(null,pc[0].concat(pc[1])))*1.1;
+      var svg=el("svg",{viewBox:"0 0 "+BW+" "+BH,role:"img","aria-label":"Share of each person's messages by hour of the day"}),gw=(BW-bm.l-bm.r)/24;
+      for(var g=0;g<=4;g++){var v=mx*g/4,y=BH-bm.b-(BH-bm.t-bm.b)*g/4;svg.appendChild(el("line",{x1:bm.l,x2:BW-bm.r,y1:y,y2:y,stroke:"var(--line)","stroke-width":1}));svg.appendChild(el("text",{x:bm.l-6,y:y+4,"text-anchor":"end"},Math.round(v)+"%"));}
+      for(var hh=0;hh<24;hh++){[0,1].forEach(function(p){var bh=(BH-bm.t-bm.b)*pc[p][hh]/mx;svg.appendChild(el("rect",{x:(bm.l+gw*hh+1+p*(gw/2-1)).toFixed(1),y:(BH-bm.b-bh).toFixed(1),width:Math.max(1,gw/2-1.5).toFixed(1),height:bh.toFixed(1),rx:1.5,fill:p?B:A}));});if(hh%6===0||hh===23){svg.appendChild(el("text",{x:bm.l+gw*hh+gw/2,y:BH-8,"text-anchor":"middle"},String(hh).padStart(2,"0")+":00"));}}
+      ch.appendChild(svg);card.appendChild(h("h3",null,"When each of you wrote"));card.appendChild(h("p","small muted","Share of each person's messages by hour of the day."));card.appendChild(ch);
+      var pk=pc.map(function(a){return a.indexOf(Math.max.apply(null,a));});
+      card.appendChild(h("p","small take",D.names[0]+" wrote most around "+String(pk[0]).padStart(2,"0")+":00, "+D.names[1]+" around "+String(pk[1]).padStart(2,"0")+":00."));host.appendChild(card);shown++;
+    }
+  }
+  $("moreNote").hidden=!D.example;
 }
 function tile(k,v,n){var c=h("div","card tile");c.appendChild(h("div","k",k));c.appendChild(h("div","v",v));if(n){c.appendChild(h("div","n",n));}return c;}
 function render(D){
-  drawThreads(D);
+  drawThreads(D);renderMore(D);
   var t=$("tiles");t.replaceChildren();
   if(D.change!=null){
     t.appendChild(tile("When it changed","Week of "+fmtDate(D.weeks[D.change].start),"Message volume fell below 40% of the two months before and did not come back."));
@@ -762,7 +844,7 @@ function render(D){
   }
   t.appendChild(tile("Messages read",(D.count[0]+D.count[1]).toLocaleString(),D.names[0]+" "+D.count[0].toLocaleString()+", "+D.names[1]+" "+D.count[1].toLocaleString()));
   var lg=$("legend");lg.replaceChildren();
-  [0,1].forEach(function(p){var s=h("span");var b=h("b");b.style.background=p?"var(--b)":"var(--a)";s.appendChild(b);s.appendChild(document.createTextNode(D.names[p]));lg.appendChild(s);});
+  [0,1].forEach(function(p){var s=h("span");var b=h("b");b.style.background=p?"var(--b)":"var(--a)";s.appendChild(b);s.appendChild(document.createTextNode((D.label||D.names)[p]));lg.appendChild(s);});
   lineChart($("cMsgs"),D,function(w,p){return w.n[p];},"Messages per week for each person");
   lineChart($("cReply"),D,function(w,p){return w.med[p];},"Median minutes to reply per week for each person");
   function signText(sg,moved){var nm=D.names[sg.p];
@@ -881,26 +963,44 @@ async function readFile(f){
   }
   return f.text();
 }
+var lastMsgs=null;
+function guessMe(msgs,fname){
+  if(!fname){return null;}
+  var base=fname.toLowerCase().replace(/\.(zip|txt)$/,"").replace(/^whatsapp chat (with|-)\s*/,"").replace(/^chat de whatsapp con\s*/,"").replace(/\s*\(\d+\)$/,"").trim();
+  if(!base||base==="_chat"){return null;}
+  var count={};msgs.forEach(function(m){count[m.who]=(count[m.who]||0)+1;});
+  var names=Object.keys(count).sort(function(x,y){return count[y]-count[x];}).slice(0,2);
+  if(names.length<2){return null;}
+  var hit=names.map(function(n){n=n.toLowerCase();return base.indexOf(n)>=0||n.indexOf(base)>=0;});
+  return hit[0]&&!hit[1]?names[1]:hit[1]&&!hit[0]?names[0]:null;
+}
+function show(msgs,me){
+  var D=analyse(msgs,me);current=D;render(D);
+  var bn=$("banner");bn.className="banner real";bn.replaceChildren(h("strong",null,"Your chat."),h("span",null,D.names[0]+" and "+D.names[1]+", "+fmtDate(D.msgs[0].t)+" to "+fmtDate(D.msgs[D.msgs.length-1].t)+". Read on this device."));
+  var hasAI=!!((window.claude&&window.claude.use)||REPORT_ENDPOINT);
+  $("write").hidden=!hasAI;$("writeNote").hidden=!hasAI;$("write").textContent="Write a deeper report";
+  $("storyHint").textContent=hasAI?"A first reading, made on this device from the numbers and the words in your chat. Press the button for a deeper account written by AI.":"Made on this device from the numbers and the words in your chat. Nothing was sent anywhere.";
+  var themes=wordThemes(D);
+  $("storyText").textContent=localStory(D,themes,D.soft||[]);
+  renderReasons(themes,false);$("reasonHint").hidden=false;
+  setStatus("");
+  $("doneNames").textContent=D.names[0]+" and "+D.names[1];
+  $("doneMeta").textContent=D.msgs.length.toLocaleString()+" messages, "+fmtDate(D.msgs[0].t)+" to "+fmtDate(D.msgs[D.msgs.length-1].t)+". Read on this device only.";
+  $("whoAsk").textContent=me?"You are":"Which one are you?";
+  $("me0").textContent=D.names[0];$("me1").textContent=D.names[1];
+  $("me0").setAttribute("aria-pressed",me?"true":"false");$("me1").setAttribute("aria-pressed","false");
+  $("intake").hidden=true;$("done").hidden=false;
+}
 async function load(f,pasted){
   try{
     setStatus(pasted?"Reading the pasted text ...":"Reading "+f.name+" ...");
     var text=pasted!=null?pasted:await readFile(f),msgs=parseChat(text);
     if(msgs.length<(pasted!=null?100:200)){throw new Error(msgs.length?"Only "+msgs.length+" messages were found. That is too few to find a pattern. "+(pasted!=null?"Paste more, or upload the full chat.":"Check that the export is complete."):"No messages were recognised. Check that this is text from a WhatsApp chat.");}
-    var D=analyse(msgs);current=D;render(D);
-    var bn=$("banner");bn.className="banner real";bn.replaceChildren(h("strong",null,"Your chat."),h("span",null,D.names[0]+" and "+D.names[1]+", "+fmtDate(D.msgs[0].t)+" to "+fmtDate(D.msgs[D.msgs.length-1].t)+". Read on this device."));
-    var hasAI=!!((window.claude&&window.claude.use)||REPORT_ENDPOINT);
-    $("write").hidden=!hasAI;$("writeNote").hidden=!hasAI;$("write").textContent="Write a deeper report";
-    $("storyHint").textContent=hasAI?"A first reading, made on this device from the numbers and the words in your chat. Press the button for a deeper account written by AI.":"Made on this device from the numbers and the words in your chat. Nothing was sent anywhere.";
-    var themes=wordThemes(D);
-    $("storyText").textContent=localStory(D,themes,D.soft||[]);
-    renderReasons(themes,false);$("reasonHint").hidden=false;
-    setStatus("");
-    $("doneNames").textContent=D.names[0]+" and "+D.names[1];
-    $("doneMeta").textContent=D.msgs.length.toLocaleString()+" messages, "+fmtDate(D.msgs[0].t)+" to "+fmtDate(D.msgs[D.msgs.length-1].t)+". Read on this device only.";
-    $("intake").hidden=true;$("done").hidden=false;
+    show(msgs,guessMe(msgs,f?f.name:null));lastMsgs=msgs;
     if(window.innerWidth<=820){$("drop").scrollIntoView({behavior:"smooth",block:"start"});}else{window.scrollTo({top:0,behavior:"smooth"});}
   }catch(e){setStatus(e&&e.message?e.message:"That file could not be read.",true);}
 }
+[0,1].forEach(function(k){$("me"+k).addEventListener("click",function(){if(lastMsgs&&current&&current.full){try{show(lastMsgs,current.full[k]);}catch(e){}}});});
 var drop=$("drop"),file=$("file");
 $("pick").addEventListener("click",function(){file.click();});
 file.addEventListener("change",function(){if(file.files[0]){load(file.files[0]);}});
