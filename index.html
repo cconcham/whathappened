@@ -280,6 +280,15 @@ h1{letter-spacing:-.045em}
 .photo-slot{height:200px;border-radius:28px;overflow:hidden;position:relative;border:1px solid var(--edge);box-shadow:var(--shadow)}
 .photo-slot svg{width:100%;height:100%;display:block}
 .sec h2::before{content:"";display:block;width:44px;height:1px;background:rgba(20,22,43,.35);margin-bottom:14px}
+.done h3{font-size:26px;letter-spacing:-.02em}
+.donebtns{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-top:6px}
+.linkbtn{background:none;border:0;padding:6px 0;font:inherit;font-weight:600;color:var(--muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.plainlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:15px}
+.plainlist b{font-weight:700}
+.story{white-space:pre-line}
+.scene.s2{z-index:2}.scene.s3{z-index:3}
+@keyframes sc1{0%,36%{opacity:1}36.1%,94%{opacity:0}94.1%,100%{opacity:1}}
+@keyframes sc2{0%,30%{opacity:0}36%,69%{opacity:1}69.1%,100%{opacity:0}}
 </style>
 </head>
 <body>
@@ -295,6 +304,7 @@ h1{letter-spacing:-.045em}
     <h1>What happened?</h1>
     <p class="lede">Add your WhatsApp chat. See when it changed, whether there were signs, and why.</p>
     <div class="drop" id="drop">
+      <div id="intake" class="pane">
       <div class="tabs" role="tablist" aria-label="Ways to add your chat">
         <button type="button" role="tab" id="tab-paste" aria-controls="pane-paste" aria-selected="true">Paste</button>
         <button type="button" role="tab" id="tab-file" aria-controls="pane-file" aria-selected="false">Upload file <span class="best">Best</span></button>
@@ -339,6 +349,13 @@ h1{letter-spacing:-.045em}
         <input type="file" id="file" accept=".txt,.zip" hidden>
         <p class="small muted">Or drag it anywhere on this page. The full chat covers the whole relationship, so the answers are more reliable. It stays in this browser tab.</p>
       </div>
+      </div>
+      <div id="done" class="pane done" hidden>
+        <p class="eyebrow">Your chat is in</p>
+        <h3 id="doneNames"></h3>
+        <p class="small muted" id="doneMeta"></p>
+        <div class="donebtns"><button class="btn" id="seeBtn" type="button">See what happened</button><button class="linkbtn" id="again" type="button">Use another chat</button></div>
+      </div>
       <p id="status" role="status"></p>
     </div>
   </div>
@@ -373,7 +390,7 @@ h1{letter-spacing:-.045em}
 <section class="sec" id="signs">
     <h2>2. Were there signs?</h2>
   <p class="say" id="signSay"></p>
-  <p class="muted">Each card compares the last weeks with how things usually were between you. These come straight from the timings in the chat, with no AI involved.</p>
+  <p class="muted">The last weeks compared with how things usually were between you, counted from the timings in the chat.</p>
   <div class="reasons" id="signalCards"></div>
 </section>
 
@@ -388,6 +405,7 @@ h1{letter-spacing:-.045em}
 <section class="sec" id="reasons">
   <h2>The usual reasons, checked against your chat</h2>
   <p class="muted">The score is how much evidence for a theme shows up in the messages, from 0 to 100. It is not the chance that it happened. Each theme lists the dated moments behind it so you can judge for yourself.</p>
+  <p class="small muted" id="reasonHint" hidden>These themes were found by matching words in the messages near the end, not by reading them. A word can be used in passing, so read the lines before trusting a score.</p>
   <div class="reasons" id="reasonCards"></div>
 </section>
 
@@ -458,6 +476,7 @@ function analyse(msgs){
   var names=Object.keys(count).sort(function(a,b){return count[b]-count[a];}).slice(0,2);
   if(names.length<2){throw new Error("This chat needs two people. Group chats and empty exports are not supported yet.");}
   msgs=msgs.filter(function(m){return names.indexOf(m.who)>=0;});
+  var sn=names.map(function(x){return x.replace(/^[^A-Za-z\u00C0-\uFFFF]+/,"").split(/\s+/)[0];});if(!sn[0]||!sn[1]||sn[0]===sn[1]){sn=names.slice();}
   var w0=monday(msgs[0].t),wN=monday(msgs[msgs.length-1].t),weeks=[],idx={},d=new Date(w0);
   while(d<=wN){idx[iso(d)]=weeks.length;weeks.push({start:new Date(d),n:[0,0],rep:[[],[]],first:[0,0],days:{}});d.setDate(d.getDate()+7);}
   if(weeks.length<10){throw new Error("This chat covers less than ten weeks, which is too short to find a pattern.");}
@@ -507,9 +526,9 @@ function analyse(msgs){
     signals.push({label:label,range:r1(lo)+" to "+r1(hi)+unit,first:first,lead:first==null?null:change-first,value:first==null?null:r1(series[first])+unit,kind:kind,p:p});
   }
   [0,1].forEach(function(p){
-    addSignal(names[p]+"'s messages per week",weeks.map(function(w){return w.n[p];}),"low","","msgs",p);
-    addSignal(names[p]+"'s reply time",weeks.map(function(w){return w.med[p];}),"high"," min","reply",p);
-    addSignal("Days "+names[p]+" wrote first",weeks.map(function(w){return w.first[p];}),"low","","first",p);
+    addSignal(sn[p]+"'s messages per week",weeks.map(function(w){return w.n[p];}),"low","","msgs",p);
+    addSignal(sn[p]+"'s reply time",weeks.map(function(w){return w.med[p];}),"high"," min","reply",p);
+    addSignal("Days "+sn[p]+" wrote first",weeks.map(function(w){return w.first[p];}),"low","","first",p);
   });
   addSignal("Days with any contact",weeks.map(function(w){return w.active;}),"low","","active",0);
   /* who slowed */
@@ -524,7 +543,82 @@ function analyse(msgs){
     var p=ratio[0]>=ratio[1]?0:1;
     if(ratio[p]>1.5){slow={p:p,b:res[p].b,a:res[p].a};}
   }
-  return {names:names,msgs:msgs,weeks:weeks,change:change,signals:signals,slow:slow,count:[count[names[0]],count[names[1]]]};
+  return {names:sn,full:names,msgs:msgs,weeks:weeks,change:change,signals:signals,slow:slow,count:[count[names[0]],count[names[1]]]};
+}
+
+/* ---------- softer hints: was the last stretch before the change the lowest ever? ---------- */
+function softHints(D){
+  var out=[],c=D.change,W=D.weeks;if(c==null||c<24){return out;}
+  function roll(get,k){var a=0,b=0;for(var i=k-8;i<k;i++){var v=get(W[i]);a+=v[0];b+=v[1];}return b?a/b:null;}
+  function check(get,bad,make){
+    var vals=[];for(var k=12;k<=c;k++){vals.push(roll(get,k));}
+    var last=vals[vals.length-1],rest=vals.slice(0,-1).filter(function(v){return v!=null;});
+    if(last==null||rest.length<8){return;}
+    var med=median(rest),ext=bad==="low"?Math.min.apply(null,rest):Math.max.apply(null,rest);
+    if(!med){return;}
+    var rel=(last-med)/med,rank=rest.filter(function(v){return bad==="low"?v<=last:v>=last;}).length/rest.length;
+    if((bad==="low"?rel<=-0.15:rel>=0.3)&&rank<=0.1){out.push(make(Math.round(Math.abs(rel)*100),last,med,rank===0));}
+  }
+  [0,1].forEach(function(p){var nm=D.names[p];
+    check(function(w){return [w.n[p],1];},"low",function(pc,l,m,ext){return {p:p,t:nm+" was writing less",d:"About "+Math.round(l)+" messages a week in the two months before, against a usual "+Math.round(m)+"."+(ext?" The lowest stretch of the whole chat.":"")};});
+    check(function(w){return [w.first[p],1];},"low",function(pc,l,m,ext){return {p:p,t:nm+" started fewer days",d:"Wrote first on about "+r1(l)+" days a week, against a usual "+r1(m)+"."};});
+    check(function(w){return [w.aff[p],w.n[p]];},"low",function(pc,l,m){return {p:p,t:nm+" was less affectionate in writing",d:"Warm words, hearts and laughter were in "+Math.round(l*100)+"% of messages, against a usual "+Math.round(m*100)+"%."};});
+    check(function(w){return [w.q[p],w.n[p]];},"low",function(pc,l,m){return {p:p,t:nm+" asked fewer questions",d:"Questions were in "+Math.round(l*100)+"% of messages, against a usual "+Math.round(m*100)+"%."};});
+    check(function(w){return [w.rep[p].reduce(function(a,b){return a+Math.min(b,120);},0),w.rep[p].length];},"high",function(pc,l,m){return {p:p,t:nm+" was taking longer to answer",d:"Average wait of about "+Math.round(l)+" minutes, against a usual "+Math.round(m)+"."};});
+  });
+  return out;
+}
+/* ---------- themes found by matching words (no AI) ---------- */
+var THEMES=[
+ {reason:"Work and career",rx:/\b(new job|my job|the job|at work|from work|after work|work is|work has|so much work|too much work|working late|office|my boss|interview|deadline|promotion|overtime|career|colleagues?|shift|trabajo|oficina|jefe|reuni[oó]n|pega)\b/i},
+ {reason:"Time and logistics",rx:/\b(busy|no time|don'?t have time|not enough time|schedule|reschedul\w*|cancel\w*|can'?t make it|cannot make it|running late|too far|long distance|commute|next week instead|another day|rain check|ocupad[oa]|sin tiempo|no tengo tiempo|lejos)\b/i},
+ {reason:"Communication and conflict",rx:/\b(sorry|apologi[sz]e|upset|angry|annoy\w*|argu\w*|fight\w*|hurt|misunderst\w*|you always|you never|ignor\w*|disappoint\w*|frustrat\w*|we need to talk|not fair|perd[oó]n|molest[oa]|enojad[oa]|pelea\w*)\b/i},
+ {reason:"Different futures",rx:/\b(the future|our future|long[- ]term|marri\w*|married|kids|children|a family|settle down|move (back|away|abroad|to)|visa|commit\w*|serious about|not ready|different (things|paths|stage)|what (are we|we are)|where (is this|this is) going|futuro|casar\w*|hijos|comprom\w*)\b/i},
+ {reason:"Money",rx:/\b(money|rent|expensive|afford|salary|debt|owe|broke|split the|pay you back|too pricey|dinero|plata|caro|deuda)\b/i},
+ {reason:"Routine and boredom",rx:/\b(bor(ed|ing)|same thing|routine|nothing new|nothing to (say|talk)|spark|aburrid[oa]|rutina|monoton\w*)\b/i},
+ {reason:"Someone else",rx:/\b(my ex|your ex|someone else|another (guy|girl|man|woman)|jealous\w*|cheat\w*|tinder|bumble|hinge|dating app|seeing (someone|anyone)|otra persona|celos\w*|infiel)\b/i}
+];
+function wordThemes(D){
+  var M=D.msgs,c=D.change,cut=c!=null?new Date(D.weeks[Math.max(0,c-6)].start):M[Math.floor(M.length*0.8)].t,mid=c!=null?D.weeks[c].start:M[M.length-1].t;
+  var nLate=0,nBase=0;M.forEach(function(m){if(m.t>=cut){nLate++;}else{nBase++;}});
+  return THEMES.map(function(T){
+    var late=[],base=0;
+    M.forEach(function(m){if(isMedia(m.text)||isCall(m.text)||m.text.length>600){return;}if(T.rx.test(m.text)){if(m.t>=cut){late.push(m);}else{base++;}}});
+    var rl=late.length/Math.max(1,nLate),rb=base/Math.max(1,nBase),lift=rb?rl/rb:(late.length?3:0);
+    var s=Math.round(100*(1-Math.exp(-late.length/10))*(0.3+0.7*Math.min(1,lift/2.5)));
+    late.sort(function(a,b){return Math.abs(a.t-mid)-Math.abs(b.t-mid);});
+    var ev=late.slice(0,3).sort(function(a,b){return a.t-b.t;}).map(function(m){return {date:iso(m.t),quote:m.text.replace(/\s+/g," ").slice(0,170)};});
+    return {reason:T.reason,strength:s,confidence:"word match",evidence:ev,late:late.length,base:base,lift:lift,
+      note:late.length?late.length+(late.length===1?" message near the end mentions this":" messages near the end mention this")+(lift>=1.5?", "+(lift>=10?"far":r1(lift)+" times")+" more often than before.":lift>0?", about as often as before.":"."):"Barely mentioned in the messages near the end."};
+  });
+}
+
+function localStory(D,themes,soft){
+  var A=D.names[0],B=D.names[1],c=D.change,W=D.weeks,ps=[];
+  function avg(a,f){return a.length?a.reduce(function(s,w){return s+f(w);},0)/a.length:0;}
+  function span(n){var m=Math.max(1,Math.round(n/4.345));return m+(m===1?" month":" months");}
+  if(c==null){
+    ps.push(A+" and "+B+" wrote to each other for "+span(W.length)+", about "+Math.round(avg(W,function(w){return w.tot;}))+" messages a week.");
+    ps.push("The conversation never drops sharply and stays down, so the chat has no single moment to point to. If things ended, it happened off the page, or after this export stops.");
+  }else{
+    var pre=W.slice(0,c),act=avg(pre,function(w){return w.active;}),mB=Math.round(avg(W.slice(Math.max(0,c-8),c),function(w){return w.tot;})),mA=Math.round(avg(W.slice(c),function(w){return w.tot;}));
+    var med=[0,1].map(function(p){var a=[];pre.forEach(function(w){a.push.apply(a,w.rep[p]);});return median(a);});
+    var sent=[0,1].map(function(p){return pre.reduce(function(s,w){return s+w.n[p];},0);}),share=Math.round(100*sent[0]/Math.max(1,sent[0]+sent[1]));
+    var s1="For about "+span(c)+", "+A+" and "+B+" wrote "+(act>=5.5?"almost every day":act>=4?"most days":"regularly")+", around "+Math.round(avg(pre,function(w){return w.tot;}))+" messages a week.";
+    if(med[0]!=null&&med[1]!=null){s1+=" "+A+" typically answered in about "+Math.round(med[0])+" minutes and "+B+" in about "+Math.round(med[1])+".";}
+    s1+=share>=42&&share<=58?" The writing was balanced between you.":" "+(share>58?A:B)+" did more of the writing ("+(share>58?share:100-share)+"% of the messages).";
+    ps.push(s1);
+    var s2="That changed in the week of "+fmtDate(W[c].start)+". Messages fell from about "+mB+" a week to about "+mA+" and did not come back.";
+    if(D.slow){var o=1-D.slow.p;s2+=" "+D.names[D.slow.p]+"'s typical reply went from "+Math.round(D.slow.b)+" to "+Math.round(D.slow.a)+" minutes"+(med[o]!=null?", while "+D.names[o]+" kept answering about as quickly as before.":".");}
+    ps.push(s2);
+    var early=D.signals.filter(function(x){return x.lead>0;}).sort(function(a,b){return b.lead-a.lead;});
+    if(early.length){ps.push("It did not come from nowhere. "+early[0].lead+(early[0].lead===1?" week":" weeks")+" earlier, "+early[0].label.charAt(0).toLowerCase()+early[0].label.slice(1)+" had already left its usual range.");}
+    else if(soft.length){ps.push("There was no clear warning. Looking back, the only hints were small: "+soft.slice(0,2).map(function(x){return x.t.charAt(0).toLowerCase()+x.t.slice(1);}).join(", and ")+".");}
+    else{ps.push("Nothing measurable led up to it. How much you wrote, how fast you answered and who wrote first were all normal the week before. A break this sudden usually comes from a decision or an event, not from a slow fade.");}
+  }
+  var top=themes.filter(function(t){return t.strength>=35;}).sort(function(a,b){return b.strength-a.strength;}).slice(0,2).map(function(t){return t.reason.toLowerCase();});
+  ps.push((top.length?"In the messages near the end, the words point most to "+top.join(" and ")+". The dated lines below show where.":"The words near the end do not point clearly to any of the usual reasons.")+" A chat cannot show calls, time together, or anything felt and not written.");
+  return ps.join("\n\n");
 }
 
 /* ---------- example data: an invented couple ---------- */
@@ -589,7 +683,7 @@ function drawThreads(D){
   label(bi,m.t+12,"Warmest together");
   var bandTxt="Warmest together: "+fmtDate(D.weeks[b0].start)+" to "+fmtDate(D.weeks[b1].start)+". ";
   var early=(D.signals||[]).filter(function(s){return s.lead>0&&s.first!=null;}).sort(function(a,b){return b.lead-a.lead;})[0];
-  if(early&&Math.abs(early.first-bi)>3&&(D.change==null||D.change-early.first>2)){var p2=early.label.indexOf(D.names[1])>=0?1:0,fy=Y(D.weeks[early.first].warm[p2]);svg.appendChild(el("circle",{cx:X(early.first),cy:fy,r:5,fill:"var(--panel)",stroke:p2?"var(--b)":"var(--a)","stroke-width":2.5}));label(early.first,Math.min(H-m.b-6,fy+22),"First sign");}
+  if(early&&Math.abs(early.first-bi)>3&&(D.change==null||D.change-early.first>2)){var p2=early.p||0,fy=Y(D.weeks[early.first].warm[p2]);svg.appendChild(el("circle",{cx:X(early.first),cy:fy,r:5,fill:"var(--panel)",stroke:p2?"var(--b)":"var(--a)","stroke-width":2.5}));label(early.first,Math.min(H-m.b-6,fy+22),"First sign");}
   var cur=el("line",{y1:m.t-6,y2:H-m.b,stroke:"var(--ink)","stroke-width":1,opacity:0});svg.appendChild(cur);
   var hint=bandTxt+"Move across the chart to feel any week.";$("scrub").textContent=hint;
   svg.onpointermove=function(ev){var r=svg.getBoundingClientRect();if(!r.width){return;}var x=(ev.clientX-r.left)/r.width*W;var i=Math.max(0,Math.min(n-1,Math.round((x-m.l)/(W-m.l-m.r)*(n-1))));cur.setAttribute("x1",X(i));cur.setAttribute("x2",X(i));cur.setAttribute("opacity",.45);var w=D.weeks[i];$("scrub").textContent="Week of "+fmtDate(w.start)+": "+D.names[0]+" "+feel(w.warm[0])+", "+D.names[1]+" "+feel(w.warm[1])+".";};
@@ -600,7 +694,7 @@ function drawThreads(D){
   if(D.change!=null){
     var months=Math.max(1,Math.round(D.change/4.345)),bw=[0,1].map(function(p){var a=D.weeks.slice(Math.max(0,D.change-12),D.change),b=D.weeks.slice(D.change);var f=function(x){return x.reduce(function(s,w){return s+w.warm[p];},0)/Math.max(1,x.length);};return f(a)-f(b);});
     var who=bw[0]>bw[1]*1.4?0:bw[1]>bw[0]*1.4?1:-1;
-    say="Warm with each other for "+months+(months===1?" month":" months")+". Then "+(who<0?"you both went quiet":D.names[who]+" pulled away")+".";
+    say="Warm with each other for "+months+(months===1?" month":" months")+". Then "+(who>=0?D.names[who]+" pulled away":(D.signals||[]).some(function(x){return x.lead>0;})?"you both went quiet":"it went quiet in a single week")+".";
   }else{say="Warm with each other all the way through. The chat shows no clear break.";}
   $("say").textContent=say;
 }
@@ -650,19 +744,30 @@ function render(D){
     var avg=function(a){return a.length?Math.round(a.reduce(function(x,w){return x+w.tot;},0)/a.length):0;};
     ws.textContent="It changed in the week of "+fmtDate(D.weeks[D.change].start)+". Before that you exchanged about "+avg(D.weeks.slice(Math.max(0,D.change-8),D.change))+" messages a week. After, about "+avg(D.weeks.slice(D.change))+".";
   }else{ws.textContent="No single week stands out. The conversation never dropped and stayed down.";}
+  if(D.slow&&!D.example){D.signals.forEach(function(x){if(x.kind==="reply"&&x.p===D.slow.p&&x.first==null){x.first=D.change;x.lead=0;x.value=r1(D.slow.a)+" min";x.pooled=true;}});}
   var sorted=D.signals.slice().sort(function(a,b){return (b.lead==null?-99:b.lead)-(a.lead==null?-99:a.lead);});
   var earlyS=sorted.filter(function(x){return x.lead>0;}),ss=$("signSay");
   if(earlyS.length){var e0=earlyS[0],tx=signText(e0,true);ss.textContent=(earlyS.length===1?"One sign came first. ":"A few signs came first. ")+"The earliest was "+e0.lead+(e0.lead===1?" week":" weeks")+" before: "+tx+".";}
   else if(sorted.length){ss.textContent="No real warning. Nothing moved before the week it changed.";}
   else{ss.textContent=D.change==null?"There was no break to look for signs of.":"There is not enough history before the change to tell.";}
   var sc=$("signalCards");sc.replaceChildren();
-  sorted.forEach(function(sg){
-    var moved=sg.first!=null,c=h("div","card sign"+(moved?"":" calm"));
-    c.appendChild(h("span","pill "+(sg.lead==null?"none":sg.lead>0?"early":"same"),sg.lead==null?"No change":sg.lead>0?sg.lead+(sg.lead===1?" week before":" weeks before"):sg.lead===0?"The same week":"After"));
-    c.appendChild(h("h3",null,signText(sg,moved)));
-    c.appendChild(h("p","small muted",moved?"Usually "+sg.range+". In the week of "+fmtDate(D.weeks[sg.first].start)+" it was "+sg.value+".":"Stayed within "+sg.range+" until the end."));
-    sc.appendChild(c);
+  var soft=D.example?[]:softHints(D);D.soft=soft;
+  if(!earlyS.length&&sorted.length){ss.textContent=soft.length?"No clear warning. Looking back, there were small drifts.":"No warning in the chat. Everything looked normal until the week it changed.";}
+  function detail(sg){return sg.pooled?"Usually "+sg.range+". After the change it was "+sg.value+".":"Usually "+sg.range+". In the week of "+fmtDate(D.weeks[sg.first].start)+" it was "+sg.value+".";}
+  earlyS.forEach(function(sg){
+    var c=h("div","card sign");
+    c.appendChild(h("span","pill early",sg.lead+(sg.lead===1?" week before":" weeks before")));
+    c.appendChild(h("h3",null,signText(sg,true)));c.appendChild(h("p","small muted",detail(sg)));sc.appendChild(c);
   });
+  soft.forEach(function(x){var c=h("div","card sign");c.appendChild(h("span","pill none","Small drift, two months before"));c.appendChild(h("h3",null,x.t));c.appendChild(h("p","small muted",x.d));sc.appendChild(c);});
+  function group(title,pill,cls,items,fn){
+    if(!items.length){return;}
+    var c=h("div","card sign"+(cls?" "+cls:""));c.appendChild(h("span","pill "+pill,title));
+    var ul=h("ul","plainlist");items.forEach(function(sg){var li=h("li");li.appendChild(h("b",null,signText(sg,sg.first!=null)));var t=fn(sg);if(t){li.appendChild(h("span","small muted"," "+t));}ul.appendChild(li);});
+    c.appendChild(ul);sc.appendChild(c);
+  }
+  group("When it changed","same","",sorted.filter(function(x){return x.first!=null&&x.lead<=0;}),detail);
+  group("What stayed the same","none","calm",sorted.filter(function(x){return x.first==null;}),function(sg){return "Within "+sg.range+" to the end.";});
 }
 function renderReasons(list,example){
   var host=$("reasonCards");host.replaceChildren();
@@ -670,7 +775,7 @@ function renderReasons(list,example){
     var c=h("div","card reason"),hd=h("div","head"),s=Math.max(0,Math.min(100,Math.round(+r.strength||0)));
     hd.appendChild(h("h3",null,String(r.reason||"")));hd.appendChild(h("span","score",s+" / 100"));c.appendChild(hd);
     var bar=h("div","bar"),sp=h("span");sp.style.width=s+"%";bar.appendChild(sp);c.appendChild(bar);
-    c.appendChild(h("span","pill","Confidence: "+String(r.confidence||"low")));
+    c.appendChild(h("span","pill",r.confidence==="word match"?"Found by matching words":"Confidence: "+String(r.confidence||"low")));
     var ev=Array.isArray(r.evidence)?r.evidence.slice(0,4):[];
     if(ev.length){var ul=h("ul");ev.forEach(function(e){var li=h("li");var dd=new Date(String(e.date||"")+"T12:00:00");var tm=h("time",null,isNaN(dd)?String(e.date||""):fmtDate(dd));li.appendChild(tm);li.appendChild(document.createTextNode("“"+String(e.quote||"").slice(0,180)+"”"));ul.appendChild(li);});c.appendChild(ul);}
     if(r.note){c.appendChild(h("p","note",String(r.note)));}
@@ -710,7 +815,7 @@ function parseJson(txt){var a=txt.indexOf("{"),b=txt.lastIndexOf("}");if(a<0||b<
 async function writeReport(){
   var btn=$("write"),story=$("storyText");
   if(!current||current.example){return;}
-  btn.disabled=true;story.textContent="Reading the messages around the moments that mattered. This can take a minute.";
+  btn.disabled=true;var keep=story.textContent;story.textContent="Reading the messages around the moments that mattered. This can take a minute.";
   try{
     var sample=(window.claude&&window.claude.use)?await window.claude.use("sample"):null;
     var res;
@@ -723,11 +828,12 @@ async function writeReport(){
     else{story.textContent="The written report is not connected in this view. The timings and signals above are complete without it.";btn.disabled=false;return;}
     var j=parseJson(res.text||"");
     story.textContent=String(j.story||"").trim()||"Claude returned no account. Try again.";
-    if(Array.isArray(j.reasons)&&j.reasons.length){renderReasons(j.reasons,false);}
+    if(Array.isArray(j.reasons)&&j.reasons.length){renderReasons(j.reasons,false);$("reasonHint").hidden=true;}
     btn.textContent="Write it again";
   }catch(e){
     var code=e&&e.code;
-    story.textContent=code==="not_granted"?"You declined to send the extract, so no written report was made. The timings and signals above do not need it.":code==="rate_limited"?"Claude is busy right now. Wait a minute and press the button again.":"The report could not be written this time. Press the button to try again.";
+    story.textContent=code==="not_granted"?"You declined to send the extract, so no written report was made. The timings and signals above do not need it.":code==="rate_limited"?"Claude is busy right now. Wait a minute and press the button again.":"The deeper report could not be written this time. Press the button to try again.";
+    if(keep){story.textContent=keep+"\n\n"+story.textContent;}
   }
   btn.disabled=false;
 }
@@ -751,11 +857,17 @@ async function load(f,pasted){
     if(msgs.length<(pasted!=null?100:200)){throw new Error(msgs.length?"Only "+msgs.length+" messages were found. That is too few to find a pattern. "+(pasted!=null?"Paste more, or upload the full chat.":"Check that the export is complete."):"No messages were recognised. Check that this is text from a WhatsApp chat.");}
     var D=analyse(msgs);current=D;render(D);
     var bn=$("banner");bn.className="banner real";bn.replaceChildren(h("strong",null,"Your chat."),h("span",null,D.names[0]+" and "+D.names[1]+", "+fmtDate(D.msgs[0].t)+" to "+fmtDate(D.msgs[D.msgs.length-1].t)+". Read on this device."));
-    $("write").hidden=false;$("writeNote").hidden=false;
-    $("storyText").textContent="Press the button above for a written account of what the messages say.";
-    $("reasonCards").replaceChildren(h("p","muted","The themes appear here once the written report is made."));
-    setStatus("Done. "+D.msgs.length.toLocaleString()+" messages analysed.");
-    $("answer").scrollIntoView({behavior:"smooth",block:"start"});
+    var hasAI=!!((window.claude&&window.claude.use)||REPORT_ENDPOINT);
+    $("write").hidden=!hasAI;$("writeNote").hidden=!hasAI;$("write").textContent="Write a deeper report";
+    $("storyHint").textContent=hasAI?"A first reading, made on this device from the numbers and the words in your chat. Press the button for a deeper account written by AI.":"Made on this device from the numbers and the words in your chat. Nothing was sent anywhere.";
+    var themes=wordThemes(D);
+    $("storyText").textContent=localStory(D,themes,D.soft||[]);
+    renderReasons(themes,false);$("reasonHint").hidden=false;
+    setStatus("");
+    $("doneNames").textContent=D.names[0]+" and "+D.names[1];
+    $("doneMeta").textContent=D.msgs.length.toLocaleString()+" messages, "+fmtDate(D.msgs[0].t)+" to "+fmtDate(D.msgs[D.msgs.length-1].t)+". Read on this device only.";
+    $("intake").hidden=true;$("done").hidden=false;
+    window.scrollTo({top:0,behavior:"smooth"});
   }catch(e){setStatus(e&&e.message?e.message:"That file could not be read.",true);}
 }
 var drop=$("drop"),file=$("file");
@@ -765,6 +877,8 @@ file.addEventListener("change",function(){if(file.files[0]){load(file.files[0]);
 ["dragleave","drop"].forEach(function(ev){document.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove("over");});});
 document.addEventListener("drop",function(e){var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f){load(f);}});
 $("write").addEventListener("click",writeReport);
+$("seeBtn").addEventListener("click",function(){$("answer").scrollIntoView({behavior:"smooth",block:"start"});});
+$("again").addEventListener("click",function(){$("done").hidden=true;$("intake").hidden=false;file.value="";$("paste").value="";});
 $("usePaste").addEventListener("click",function(){var t=$("paste").value;if(t.trim().length<50){setStatus("Paste some messages into the box first.",true);return;}load(null,t);});
 ["ios","android"].forEach(function(k){$("os-"+k).addEventListener("click",function(){$("demo").setAttribute("data-os",k);$("os-ios").setAttribute("aria-pressed",k==="ios"?"true":"false");$("os-android").setAttribute("aria-pressed",k==="android"?"true":"false");});});
 var tabs=["paste","file"];
