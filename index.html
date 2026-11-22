@@ -644,6 +644,7 @@ function localStory(D,themes,soft){
     var early=D.signals.filter(function(x){return x.lead>0;}).sort(function(a,b){return b.lead-a.lead;});
     if(early.length){ps.push("It did not come from nowhere. "+early[0].lead+(early[0].lead===1?" week":" weeks")+" earlier, "+early[0].label.charAt(0).toLowerCase()+early[0].label.slice(1)+" had already left its usual range.");}
     else if(soft.length){ps.push("There was no clear warning. Looking back, the only hints were small: "+soft.slice(0,2).map(function(x){return x.t.charAt(0).toLowerCase()+x.t.slice(1);}).join(", and ")+".");}
+    else if(!D.signals.length){ps.push("This chat is too short to say whether there were signs beforehand. A few more months of history would be needed to know what normal looked like.");}
     else{ps.push("Nothing measurable led up to it. How much you wrote, how fast you answered and who wrote first were all normal the week before. A break this sudden usually comes from a decision or an event, not from a slow fade.");}
   }
   var top=themes.filter(function(t){return t.strength>=35;}).sort(function(a,b){return b.strength-a.strength;}).slice(0,2).map(function(t){return t.reason.toLowerCase();});
