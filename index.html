@@ -292,6 +292,11 @@ h1{letter-spacing:-.045em}
 .whoami{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
 .take{color:var(--ink);font-weight:600;margin-top:4px}
 #deeper .leg{position:sticky;top:76px;z-index:3;align-self:flex-start;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:999px;padding:6px 14px;border:1px solid var(--edge)}
+.morewrap{display:flex;flex-direction:column;gap:14px}
+.morewrap[hidden]{display:none}
+.mob{display:none}
+body.phone .desk{display:none}
+body.phone .demo[data-os="ios"] .mob.mios,body.phone .demo[data-os="android"] .mob.mand{display:inline}
 /* ---------- phones ---------- */
 #threads{touch-action:pan-y}
 .linkbtn{min-height:44px}
@@ -356,7 +361,7 @@ h1{letter-spacing:-.045em}
             <ol class="democap">
       <li class="c1"><span class="ios">Open the chat. Tap the name at the top.</span><span class="android">Open the chat. Tap the three dots.</span></li>
       <li class="c2"><span class="ios">Tap Export chat, then Without media.</span><span class="android">Tap More, Export chat, then Without media.</span></li>
-      <li class="c3">Send it to yourself, then drop it here.</li>
+      <li class="c3"><span class="desk">Send it to yourself, then drop it here.</span><span class="mob mios">Tap Save to Files. Come back here and tap Choose your chat file.</span><span class="mob mand">Save it to your phone or to Drive. Come back here and tap Choose your chat file.</span></li>
     </ol>
           </div>
           <div class="phone" role="img" aria-label="Animation of the three steps on a phone">
@@ -379,8 +384,8 @@ h1{letter-spacing:-.045em}
     </div>
         </div>
         <button class="btn" id="pick" type="button">Choose your chat file</button>
-        <input type="file" id="file" accept=".txt,.zip" hidden>
-        <p class="small muted">Or drag it anywhere on this page. The full chat covers the whole relationship, so the answers are more reliable. It stays in this browser tab.</p>
+        <input type="file" id="file" accept=".txt,.zip,text/plain,application/zip,application/x-zip-compressed" hidden>
+        <p class="small muted" id="fileHint">Or drag it anywhere on this page. The full chat covers the whole relationship, so the answers are more reliable. It stays in this browser tab.</p>
       </div>
       </div>
       <div id="done" class="pane done" hidden>
@@ -444,11 +449,15 @@ h1{letter-spacing:-.045em}
 </section>
 
 <section class="sec" id="deeper">
-  <h2>Look closer</h2>
-  <p class="muted">More ways to read the same chat, for when you want to go further. The colours stay the same in every chart, and the dashed line is the week it changed.</p>
-  <p class="small muted" id="moreNote">Your own chat adds affection, curiosity, message length, photos, calls, matching style and the hours you wrote.</p>
-  <div class="leg" id="legend2"></div>
-  <div class="two" id="moreCharts"></div>
+  <h2>More analysis</h2>
+  <p class="muted">Ten more ways to read the same chat, for when you want to go further.</p>
+  <button class="btn alt" id="moreBtn" type="button" aria-expanded="false" aria-controls="moreWrap">See more analysis</button>
+  <div id="moreWrap" class="morewrap" hidden>
+    <p class="small muted">The colours stay the same in every chart, and the dashed line is the week it changed.</p>
+    <p class="small muted" id="moreNote">Your own chat adds affection, curiosity, message length, photos, calls, matching style and the hours you wrote.</p>
+    <div class="leg" id="legend2"></div>
+    <div class="two" id="moreCharts"></div>
+  </div>
 </section>
 
 <section class="sec soon" id="more">
@@ -1008,6 +1017,7 @@ file.addEventListener("change",function(){if(file.files[0]){load(file.files[0]);
 ["dragleave","drop"].forEach(function(ev){document.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove("over");});});
 document.addEventListener("drop",function(e){var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f){load(f);}});
 $("write").addEventListener("click",writeReport);
+$("moreBtn").addEventListener("click",function(){var w=$("moreWrap"),open=w.hidden;w.hidden=!open;this.setAttribute("aria-expanded",open?"true":"false");this.textContent=open?"Hide the extra analysis":"See more analysis";});
 $("seeBtn").addEventListener("click",function(){$("answer").scrollIntoView({behavior:"smooth",block:"start"});});
 $("again").addEventListener("click",function(){$("done").hidden=true;$("intake").hidden=false;file.value="";$("paste").value="";});
 $("usePaste").addEventListener("click",function(){var t=$("paste").value;if(t.trim().length<50){setStatus("Paste some messages into the box first.",true);return;}load(null,t);});
@@ -1015,6 +1025,15 @@ $("usePaste").addEventListener("click",function(){var t=$("paste").value;if(t.tr
 var tabs=["paste","file"];
 tabs.forEach(function(k){$("tab-"+k).addEventListener("click",function(){tabs.forEach(function(j){$("tab-"+j).setAttribute("aria-selected",j===k?"true":"false");$("pane-"+j).hidden=j!==k;});});});
 
+document.addEventListener("paste",function(e){var f=e.clipboardData&&e.clipboardData.files&&e.clipboardData.files[0];if(f&&/\.(zip|txt)$/i.test(f.name)){e.preventDefault();load(f);}});
+/* on a phone: everything can be done without a computer */
+try{if(window.matchMedia&&window.matchMedia("(pointer:coarse)").matches&&window.innerWidth<=820){
+  document.body.classList.add("phone");
+  $("tab-file").click();
+  if(/android/i.test(navigator.userAgent)){$("os-android").click();}
+  $("fileHint").textContent="Pick the chat you just saved. The .zip works as it is, no need to open it. It stays on this phone.";
+  var tg=document.querySelector(".scene.s3 .target");if(tg){tg.textContent="Choose file";}
+}}catch(e){}
 /* first paint: the example */
 current=exampleData();render(current);
 $("storyText").textContent=EX_STORY;renderReasons(EX_REASONS,true);
